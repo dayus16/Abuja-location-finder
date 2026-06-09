@@ -5,9 +5,12 @@ import {
   CircleMarker,
   Circle,
   Marker,
+  useMap,
 } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
+import MarkerClusterGroup from "react-leaflet-markercluster";
+
 import { useState, useEffect } from "react";
 
 import { FaMapLocationDot } from "react-icons/fa6";
@@ -19,13 +22,24 @@ import {
 } from "react-icons/io";
 import { HiMiniViewfinderCircle } from "react-icons/hi2";
 import { CiHospital1, CiBank } from "react-icons/ci";
-import { FaHotel } from "react-icons/fa";
+import { FaHotel, FaDirections } from "react-icons/fa";
 import { BsFillFuelPumpFill } from "react-icons/bs";
+
+const FlyToLocation = ({ coords }) => {
+  const map = useMap();
+  useEffect(() => {
+    if (coords) {
+      map.flyTo(coords, 13);
+    }
+  }, [coords, map]);
+  return null;
+};
 
 const Map = () => {
   const [coords, setCoords] = useState(null);
   const [inputField, setInputField] = useState("");
   const [nearByPlaces, setNearByPlaces] = useState([]);
+  const [selectedPlaces, setSelectedPlaces] = useState(null);
   const [loading, setLoading] = useState(false);
   const API_KEY = "1ad747ef3318446096bc43be639a0f80";
 
@@ -70,6 +84,7 @@ const Map = () => {
         `https://api.geoapify.com/v2/places?categories=${category}&filter=circle:${coords.lng},${coords.lat},5000&limit=10&apiKey=${API_KEY}`,
       );
       const data = await res.json();
+      console.log("Nearby places data:", data);
       setNearByPlaces(data.features || []);
     } catch (err) {
       console.error("Nearby places request failed:", err);
@@ -100,6 +115,7 @@ const Map = () => {
     setInputField("");
     setLoading(false);
   };
+
   return (
     <div>
       <header className="flex items-center gap-4 w-full p-4 bg-gray-800 text-white">
@@ -198,6 +214,8 @@ const Map = () => {
                 attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               />
+              <FlyToLocation coords={coords} />
+
               <Circle
                 center={[coords.lat, coords.lng]}
                 radius={1000}
@@ -225,30 +243,37 @@ const Map = () => {
                   {coords.lng.toFixed(4)}
                 </Popup>
               </CircleMarker>
-              {nearByPlaces.map((place) => {
-                if (!place.geometry || !place.geometry.coordinates) {
-                  return null;
-                }
-                const [lng, lat] = place.geometry.coordinates;
-                return (
-                  <Marker
-                    key={place.properties.place_id || `${lng}-${lat}`}
-                    position={[lat, lng]}
-                    icon={customIcon}
-                  >
-                    <Popup>
-                      <div className="text-sm font-semibold">
-                        {place.properties.name ||
-                          place.properties.address_line1 ||
-                          "Nearby place"}
-                      </div>
-                      <div className="text-xs text-gray-600">
-                        {place.properties.category || ""}
-                      </div>
-                    </Popup>
-                  </Marker>
-                );
-              })}
+              <MarkerClusterGroup>
+                {nearByPlaces.map((place) => {
+                  if (!place.geometry || !place.geometry.coordinates) {
+                    return null;
+                  }
+                  const [lng, lat] = place.geometry.coordinates;
+                  return (
+                    <Marker
+                      key={place.properties.place_id || `${lng}-${lat}`}
+                      position={[lat, lng]}
+                      icon={customIcon}
+                      eventHandlers={{
+                        click: () => {
+                          setSelectedPlaces(place);
+                        },
+                      }}
+                    >
+                      <Popup>
+                        <div className="text-sm font-semibold">
+                          {place.properties.name ||
+                            place.properties.address_line1 ||
+                            "Nearby place"}
+                        </div>
+                        <div className="text-xs text-gray-600">
+                          {place.properties.category || ""}
+                        </div>
+                      </Popup>
+                    </Marker>
+                  );
+                })}
+              </MarkerClusterGroup>
             </MapContainer>
           ) : (
             <div className="w-full h-[70vh] flex items-center justify-center text-gray-500 text-2xl font-semibold">
@@ -256,7 +281,38 @@ const Map = () => {
             </div>
           )}
         </div>
-        <div className="w-[20%] h-full"></div>
+        <div className="w-[20%] h-full p-3 overflow-y-auto border-t border-gray-700 pt-2">
+          {selectedPlaces && (
+            <div className="p-4">
+              <h2 className="text-lg font-semibold text-gray-300 ">
+                {" "}
+                {selectedPlaces.properties.categories[0] ||
+                  "Unknown Category"}{" "}
+              </h2>
+              <p className="text-sm text-gray-400">
+                {selectedPlaces.properties.name || ""}
+              </p>
+              <p className="text-xs text-gray-500 border border-gray-600 rounded-lg p-4 mt-2">
+                {selectedPlaces.properties.address_line2 || ""}
+                <button
+                  onClick={() => {
+                    const lat = selectedPlaces.geometry.coordinates[1];
+                    const lng = selectedPlaces.geometry.coordinates[0];
+
+                    window.open(
+                      `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`,
+                      "_blank",
+                    );
+                  }}
+                  className="mt-3 w-full bg-green-800 text-white py-2 rounded-lg text-sm flex items-center justify-center gap-2 hover:bg-green-700 transition-colors duration-300"
+                >
+                  <FaDirections size={20} />
+                  Directions
+                </button>
+              </p>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
